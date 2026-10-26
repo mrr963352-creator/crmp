@@ -1,0 +1,33 @@
+name: Build libsamp.so (CSRP)
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libs for old NDK
+        run: sudo apt-get update && sudo apt-get install -y libncurses5 libtinfo5
+      - name: Download NDK r17c (gnustl needed)
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r17c-linux-x86_64.zip
+          unzip -q android-ndk-r17c-linux-x86_64.zip
+      - name: ndk-build
+        run: |
+          set -o pipefail
+          ./android-ndk-r17c/ndk-build -k NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk APP_PLATFORM=android-21 -j4 2>&1 | tee build.log
+          ls -la libs/armeabi-v7a/
+      - name: Collect errors
+        if: failure()
+        run: grep -E "error:|undefined reference|fatal" build.log | sort -u | head -80 > errors.txt || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libsamp
+          path: |
+            libs/armeabi-v7a/libsamp.so
+            build.log
+            errors.txt
+          if-no-files-found: ignore
